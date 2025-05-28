@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beauty Website</title>
+    <link rel="shortcut icon" href="images/fav-icon.png"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import React from 'https://cdn.jsdelivr.net/npm/react@18.2.0/+esm';
+        import ReactDOM from 'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/+esm';
+        import { BrowserRouter, Routes, Route, Link, useNavigate, useParams } from 'https://cdn.jsdelivr.net/npm/react-router-dom@6.22.0/+esm';
+        import { createContext, useContext, useState, useEffect } from 'https://cdn.jsdelivr.net/npm/react@18.2.0/+esm';
+
+        const AppContext = createContext();
+
+        const AppProvider = ({ children }) => {
+            const [cart, setCart] = useState(JSON.parse(localStorage.getItem('cart')) || []);
+            const [user, setUser] = useState(JSON.parse(localStorage.getItem('loggedInUser')) || null);
+            const products = [
+                { id: 1, title: "FaceWash For Women", price: 20, image: "https://i.pinimg.com/236x/0e/f5/07/0ef507aef9a02683fc0b9fdf8163ecc2.jpg", category: "Skin" },
+                { id: 2, title: "Element Small FaceWash", price: 10, image: "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcRT_P7qxts0OFg7Xwq_oTmQBJnEGUAcT6Qf_RMx8Bb5b5Px6PJ495D_I3yUqAgOoNd9_fo&usqp=CAU", category: "Skin" },
+                // Add other products...
+            ];
+
+            useEffect(() => {
+                localStorage.setItem('cart', JSON.stringify(cart));
+            }, [cart]);
+
+            const updateCart = (newCart) => setCart(newCart);
+            const login = (userData) => {
+                setUser(userData);
+                localStorage.setItem('loggedInUser', JSON.stringify(userData));
+            };
+            const logout = () => {
+                setUser(null);
+                setCart([]);
+                localStorage.removeItem('loggedInUser');
+                localStorage.removeItem('cart');
+            };
+
+            return (
+                <AppContext.Provider value={{ cart, updateCart, user, login, logout, products }}>
+                    {children}
+                </AppContext.Provider>
+            );
+        };
+
+        const Navigation = () => {
+            const { cart, user, logout } = useContext(AppContext);
+            const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+            const [searchTerm, setSearchTerm] = useState('');
+            const navigate = useNavigate();
+
+            const handleSearch = (e) => {
+                e.preventDefault();
+                if (searchTerm.trim()) {
+                    navigate(`/search?query=${encodeURIComponent(searchTerm)}`);
+                    setSearchTerm('');
+                }
+            };
+
+            return (
+                <nav className="flex items-center justify-between p-4 bg-gray-100 shadow" aria-label="Main navigation">
+                    <Link to="/" className="logo" aria-label="Home">
+                        <img alt="Company Logo" src="images/logo.png" className="h-10" />
+                    </Link>
+                    <form className="flex items-center" onSubmit={handleSearch} role="search">
+                        <input
+                            type="search"
+                            placeholder="Search Products"
+                            className="border rounded-l px-2 py-1"
+                            aria-label="Search products"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            required
+                        />
+                        <button type="submit" className="bg-blue-500 text-white px-2 py-1 rounded-r" aria-label="Search">
+                            <i className="fa-solid fa-magnifying-glass"></i>
+                        </button>
+                    </form>
+                    <div className="flex items-center space-x-4">
+                        <div className="relative">
+                            <button
+                                className="nav-user"
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                aria-haspopup="true"
+                                aria-expanded={isDropdownOpen}
+                            >
+                                <i className={user ? "fa-solid fa-right-from-bracket" : "fa-regular fa-user"} aria-hidden="true"></i>
+                                <span className="sr-only">User menu</span>
+                            </button>
+                            {isDropdownOpen && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white shadow rounded" role="menu">
+                                    {!user && (
+                                        <>
+                                            <Link to="/login" className="block px-4 py-2 hover:bg-gray-100" role="menuitem">Login</Link>
+                                            <Link to="/register" className="block px-4 py-2 hover:bg-gray-100" role="menuitem">Register</Link>
+                                        </>
+                                    )}
+                                    {user && (
+                                        <button
+                                            onClick={() => {
+                                                logout();
+                                                setIsDropdownOpen(false);
+                                                navigate('/');
+                                                alert('Logged out successfully.');
+                                            }}
+                                            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                                            role="menuitem"
+                                        >
+                                            Logout
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <Link to="/cart" className="nav-cart relative" aria-label="Shopping cart">
+                            <i className="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+                            <span className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full px-2 text-xs" aria-live="polite">
+                                {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                            </span>
+                        </Link>
+                    </div>
+                </nav>
+            );
+        };
+
+        const Home = () => {
+            const { products, cart, updateCart, user } = useContext(AppContext);
+            const [filter, setFilter] = useState('all');
+            const navigate = useNavigate();
+
+            const handleAddToCart = (product) => {
+                if (!user) {
+                    alert('Please login to add items to your cart.');
+                    navigate('/login');
+                    return;
+                }
+                const existingItem = cart.find(item => item.title === product.title);
+                let newCart;
+                if (existingItem) {
+                    newCart = cart.map(item =>
+                        item.title === product.title ? { ...item, quantity: item.quantity + 1 } : item
+                    );
+                } else {
+                    newCart = [...cart, { ...product, quantity: 1 }];
+                }
+                updateCart(newCart);
+                alert(`${product.title} added to cart!`);
+            };
+
+            const filteredProducts = filter === 'all' ? products : products.filter(p => p.category.toLowerCase() === filter);
+
+            return (
+                <div>
+                    <Navigation />
+                    <main className="container mx-auto p-4">
+                        <section className="flex flex-col md:flex-row items-center mb-8">
+                            <div className="md:w-1/2">
+                                <h1 className="text-3xl font-bold">Ecommerce <span className="text-pink-500">Beauty Website</span></h1>
+                                <p className="my-4">Lorem ipsum dolor sit amet consectetur, adipisicing elit.</p>
+                                <Link to="/" className="bg-blue-500 text-white px-4 py-2 rounded">Shop Now</Link>
+                            </div>
+                            <img src="https://assets.boots.com/content/dam/boots/brands/brand---t/the-ordinary/the-ordinary_cp-direct-acids/the-ordinary_cp-direct-acids_2021-09/2021-09_the-ordinary_content-page_direct-acids_33-teaser_how-to-build-a-skincare-regime.dam.ts%3D1631532454891.jpg" alt="Skincare products" className="md:w-1/2 h-64 object-cover" />
+                        </section>
+                        <section>
+                            <h2 className="text-2xl font-bold mb-4">New Products</h2>
+                            <div className="flex space-x-4 mb-4">
+                                {['all', 'skin', 'makeup', 'nail', 'hair'].map(category => (
+                                    <button
+                                        key={category}
+                                        className={`px-4 py-2 rounded ${filter === category ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                                        onClick={() => setFilter(category)}
+                                    >
+                                        {category.charAt(0).toUpperCase() + category.slice(1)}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                {filteredProducts.map(product => (
+                                    <div key={product.id} className="border rounded p-4 hover:shadow-lg">
+                                        <Link to={`/product/${product.id}`}>
+                                            <img src={product.image} alt={product.title} className="w-full h-48 object-cover rounded" />
+                                            <span className="block mt-2 text-sm text-gray-600">{product.category}</span>
+                                        </Link>
+                                        <div>
+                                            <Link to={`/product/${product.id}`} className="font-bold hover:underline">{product.title}</Link>
+                                            <p className="text-lg font-semibold">${product.price.toFixed(2)}</p>
+                                            <button
+                                                className="bg-blue-500 text-white px-4 py-2 rounded mt-2 w-full"
+                                                onClick={() => handleAddToCart(product)}
+                                            >
+                                                Add to Cart
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    </main>
+                </div>
+            );
+        };
+
+        const Cart = () => {
+            const { cart, updateCart, user } = useContext(AppContext);
+            const navigate = useNavigate();
+
+            const handleQuantityChange = (index, newQuantity) => {
+                if (newQuantity < 1) return;
+                const newCart = cart.map((item, i) =>
+                    i === index ? { ...item, quantity: newQuantity } : item
+                );
+                updateCart(newCart);
+            };
+
+            const handleRemoveItem = (index) => {
+                const itemTitle = cart[index].title;
+                const newCart = cart.filter((_, i) => i !== index);
+                updateCart(newCart);
+                alert(`${itemTitle} removed from cart.`);
+            };
+
+            const handleCheckout = () => {
+                if (!user) {
+                    alert('Please login to proceed to checkout.');
+                    navigate('/login');
+                } else if (cart.length === 0) {
+                    alert('Your cart is empty.');
+                } else {
+                    alert('Proceeding to checkout... (Implement checkout logic here)');
+                }
+            };
+
+            const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+            return (
+                <div>
+                    <Navigation />
+                    <section className="container mx-auto p-4" aria-labelledby="cart-heading">
+                        <h1 id="cart-heading" className="text-3xl font-bold mb-4">Your Shopping Cart</h1>
+                        <div role="region" aria-live="polite">
+                            {cart.length === 0 ? (
+                                <p>No items in the cart yet.</p>
+                            ) : (
+                                <div className="space-y-4">
+                                    {cart.map((item, index) => (
+                                        <div key={index} className="flex items-center border-b py-4">
+                                            <img src={item.image} alt={item.title} className="w-24 h-24 object-contain" />
+                                            <div className="ml-4 flex-1">
+                                                <h3 className="font-bold">{item.title}</h3>
+                                                <p>Price: ${item.price.toFixed(2)}</p>
+                                                <p>
+                                                    Quantity:
+                                                    <input
+                                                        type="number"
+                                                        value={item.quantity}
+                                                        min="1"
+                                                        className="border rounded w-16 mx-2 px-2 py-1"
+                                                        onChange={(e) => handleQuantityChange(index, parseInt(e.target.value))}
+                                                        aria-label={`Quantity for ${item.title}`}
+                                                    />
+                                                </p>
+                                                <button
+                                                    className="text-red-500 hover:underline"
+                                                    onClick={() => handleRemoveItem(index)}
+                                                    aria-label={`Remove ${item.title} from cart`}
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="mt-4">
+                                        <h3 className="text-xl font-bold">Total: ${total.toFixed(2)}</h3>
+                                        <button
+                                            className="bg-blue-500 text-white px-4 py-2 rounded mt-2"
+                                            onClick={handleCheckout}
+                                            role="button"
+                                        >
+                                            Proceed to Checkout
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <Link to="/" className="text-blue-500 mt-4 inline-block hover:underline" role="button">Continue Shopping</Link>
+                    </section>
+                </div>
+            );
+        };
+
+        const ProductDetails = () => {
+            const { products, cart, updateCart, user } = useContext(AppContext);
+            const { id } = useParams();
+            const navigate = useNavigate();
+            const [quantity, setQuantity] = useState(1);
+            const product = products.find(p => p.id == id);
+
+            const handleAddToCart = () => {
+                if (!user) {
+                    alert('Please login to add items to your cart.');
+                    navigate('/login');
+                    return;
+                }
+                const existingItem = cart.find(item => item.title === product.title);
+                let newCart;
+                if (existingItem) {
+                    newCart = cart.map(item =>
+                        item.title === product.title ? { ...item, quantity: item.quantity + quantity } : item
+                    );
+                } else {
+                    newCart = [...cart, { ...product, quantity }];
+                }
+                updateCart(newCart);
+                alert(`${product.title} added to cart!`);
+            };
+
+            if (!product) {
+                return (
+                    <div>
+                        <Navigation />
+                        <section className="container mx-auto p-4">
+                            <p>Product Not Found</p>
+                        </section>
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <Navigation />
+                    <section className="container mx-auto p-4">
+                        <div className="flex flex-col md:flex-row gap-8">
+                            <img src={product.image} alt={product.title} className="w-full md:w-1/2 h-96 object-cover rounded" />
+                            <div className="flex-1">
+                                <h2 className="text-2xl font-bold">{product.title}</h2>
+                                <p className="text-xl my-2">${product.price.toFixed(2)}</p>
+                                <p>High-quality {product.category.toLowerCase()} product designed for women.</p>
+                                <div className="my-4 flex items-center">
+                                    <label htmlFor="quantity" className="mr-2">Quantity:</label>
+                                    <input
+                                        type="number"
+                                        id="quantity"
+                                        value={quantity}
+                                        min="1"
+                                        className="border rounded w-16 px-2 py-1"
+                                        onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                                    />
+                                </div>
+                                <button
+                                    className="bg-blue-500 text-white px-4 py-2 rounded"
+                                    onClick={handleAddToCart}
+                                >
+                                    Add to Cart
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        const Login = () => {
+            const { login } = useContext(AppContext);
+            const navigate = useNavigate();
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const users = JSON.parse(localStorage.getItem('users')) || [];
+                const user = users.find(u => u.email === email && u.password === password);
+                if (user) {
+                    login(user);
+                    alert('Login successful!');
+                    navigate('/');
+                } else {
+                    alert('Invalid email or password.');
+                }
+            };
+
+            return (
+                <div>
+                    <Navigation />
+                    <section className="container mx-auto p-4">
+                        <div className="max-w-md mx-auto bg-white p-6 rounded shadow">
+                            <h2 className="text-2xl font-bold mb-4">Login</h2>
+                            <form onSubmit={handleSubmit}>
+                                <div className="mb-4">
+                                    <label htmlFor="email" className="block mb-1">Email</label>
+                                    <input
+                                        type="email"
+                                        id="email"
+                                        className="w-full border rounded px-2 py-1"
+                                        placeholder="Enter your email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="mb-4">
+                                    <label htmlFor="password" className="block mb-1">Password</label>
+                                    <input
+                                        type="password"
+                                        id="password"
+                                        className="w-full border rounded px-2 py-1"
+                                        placeholder="Enter your password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+                                >
+                                    Login
+                                </button>
+                                <p className="mt-4 text-center">
+                                    Don't have an account? <Link to="/register" className="text-blue-500 hover:underline">Register here</Link>
+                                </p>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        const Register = () => {
+            const navigate = useNavigate();
+            const [name, setName] = useState('');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [confirmPassword, setConfirmPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (password !== confirmPassword) {
+                    alert('Passwords do not match.');
+                    return;
+                }
+                const users = JSON.parse(localStorage.getItem('users')) || [];
+                if (users.some(u => u.email === email)) {
+                    alert('Email already registered.');
+                    return;
+                }
+                users.push({ name, email, password });
+                localStorage.setItem('users', JSON.stringify(users));
+                alert('Registration successful! Please login.');
+                navigate('/login');
+            };
+
+            return (
+                <div>
+                    <Navigation />
+                    <section className="container mx-auto p-4">
+                        <div className="max-w-md mx-auto bg-white p-6 rounded shadow">
+                            <h2 className="text-2xl font-bold mb-4">Register</h2>
+                            <form onSubmit={handleSubmit}>
+                                <div className="mb-4">
+                                    <label htmlFor="name" className="block mb-1">Name</label>
+                                    <input
+                                        type="text"
+                                        id="name"
+                                        className="w-full border rounded px-2 py-1"
+                                        placeholder="Enter your name"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="mb-4">
+                                    <label htmlFor="email" className="block mb-1">Email</label>
+                                    <input
+                                        type="email"
+                                        id="email"
+                                        className="w-full border rounded px-2 py-1"
+                                        placeholder="Enter your email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="mb-4">
+                                    <label htmlFor="password" className="block mb-1">Password</label>
+                                    <input
+                                        type="password"
+                                        id="password"
+                                        className="w-full border rounded px-2 py-1"
+                                        placeholder="Enter your password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="mb-4">
+                                    <label htmlFor="confirm-password" className="block mb-1">Confirm Password</label>
+                                    <input
+                                        type="password"
+                                        id="confirm-password"
+                                        className="w-full border rounded px-2 py-1"
+                                        placeholder="Confirm your password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+                                >
+                                    Register
+                                </button>
+                                <p className="mt-4 text-center">
+                                    Already have an account? <Link to="/login" className="text-blue-500 hover:underline">Login here</Link>
+                                </p>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        const SearchResults = () => {
+            const { products, cart, updateCart, user } = useContext(AppContext);
+            const navigate = useNavigate();
+            const urlParams = new URLSearchParams(window.location.search);
+            const query = urlParams.get('query')?.toLowerCase() || '';
+            const filteredProducts = products.filter(p =>
+                p.title.toLowerCase().includes(query) || p.category.toLowerCase().includes(query)
+            );
+
+            const handleAddToCart = (product) => {
+                if (!user) {
+                    alert('Please login to add items to your cart.');
+                    navigate('/login');
+                    return;
+                }
+                const existingItem = cart.find(item => item.title === product.title);
+                let newCart;
+                if (existingItem) {
+                    newCart = cart.map(item =>
+                        item.title === product.title ? { ...item, quantity: item.quantity + 1 } : item
+                    );
+                } else {
+                    newCart = [...cart, { ...product, quantity: 1 }];
+                }
+                updateCart(newCart);
+                alert(`${product.title} added to cart!`);
+            };
+
+            return (
+                <div>
+                    <Navigation />
+                    <section className="container mx-auto p-4">
+                        <h2 className="text-2xl font-bold mb-4">Search Results for "{query}"</h2>
+                        <button
+                            className="bg-gray-200 px-4 py-2 rounded mb-4"
+                            onClick={() => navigate('/')}
+                            aria-label="Clear search results"
+                        >
+                            Clear Search
+                        </button>
+                        {filteredProducts.length === 0 ? (
+                            <p>No products found.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                {filteredProducts.map(product => (
+                                    <div key={product.id} className="border rounded p-4 hover:shadow-lg">
+                                        <Link to={`/product/${product.id}`}>
+                                            <img src={product.image} alt={product.title} className="w-full h-48 object-cover rounded" />
+                                            <span className="block mt-2 text-sm text-gray-600">{product.category}</span>
+                                        </Link>
+                                        <div>
+                                            <Link to={`/product/${product.id}`} className="font-bold hover:underline">{product.title}</Link>
+                                            <p className="text-lg font-semibold">${product.price.toFixed(2)}</p>
+                                            <button
+                                                className="bg-blue-500 text-white px-4 py-2 rounded mt-2 w-full"
+                                                onClick={() => handleAddToCart(product)}
+                                            >
+                                                Add to Cart
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            );
+        };
+
+        const Footer = () => (
+            <footer className="bg-gray-100 p-4 mt-8" aria-label="Footer">
+                <div className="container mx-auto grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="footer-company-box">
+                        <Link to="/" className="footer-logo text-xl font-bold" aria-label="Company logo">Logo</Link>
+                        <p className="my-2">Lorem ipsum dolor sit amet consectetur adipisicing elit.</p>
+                        <div className="flex space-x-4">
+                            <a href="#" aria-label="Facebook"><i className="fa-brands fa-facebook-f"></i></a>
+                            <a href="#" aria-label="Instagram"><i className="fa-brands fa-instagram"></i></a>
+                            <a href="#" aria-label="Twitter"><i className="fa-brands fa-twitter"></i></a>
+                            <a href="#" aria-label="YouTube"><i className="fa-brands fa-youtube"></i></a>
+                        </div>
+                    </div>
+                    <div className="footer-link-box">
+                        <strong>Main Links</strong>
+                        <ul>
+                            <li><Link to="/">Home</Link></li>
+                            <li><a href="#">About</a></li>
+                            <li><a href="#">Contact</a></li>
+                            <li><a href="#">Services</a></li>
+                            <li><a href="#">Portfolio</a></li>
+                        </ul>
+                    </div>
+                    <div className="footer-link-box">
+                        <strong>External Links</strong>
+                        <ul>
+                            <li><a href="#">Our Products</a></li>
+                            <li><a href="#">Privacy Policy</a></li>
+                            <li><a href="#">Disclaimer</a></li>
+                            <li><a href="#">Terms and Conditions</a></li>
+                        </ul>
+                    </div>
+                    <div className="footer-link-box">
+                        <strong>Our Products</strong>
+                        <ul>
+                            <li><a href="#">Skin Care</a></li>
+                            <li><a href="#">Hair Care</a></li>
+                            <li><a href="#">Nail Polish</a></li>
+                            <li><a href="#">Eye Liners</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div className="text-center mt-4">
+                    <span className="footer-owner">Made By Going-To Internet</span>
+                    <span className="block copyright">© Copyright 2025 - </span>
+                </div>
+            </footer>
+        );
+
+        const App = () => (
+            <BrowserRouter>
+                <AppProvider>
+                    <Routes>
+                        <Route path="/" element={<Home />} />
+                        <Route path="/cart" element={<Cart />} />
+                        <Route path="/product/:id" element={<ProductDetails />} />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route path="/search" element={<SearchResults />} />
+                    </Routes>
+                    <Footer />
+                </AppProvider>
+            </BrowserRouter>
+        );
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
